@@ -1,0 +1,15 @@
+#######################################
+# Syntax Coloring Map for WiFiNTPSync
+#######################################
+
+#######################################
+# Datatypes (KEYWORD1)
+#######################################
+WiFiNTPConfig	KEYWORD1
+WiFiNTPHooks	KEYWORD1
+
+#######################################
+# Methods and Functions (KEYWORD2)
+#######################################
+bootWiFiAndNTP	KEYWORD2
+serviceWiFiAndNTP	KEYWORD2

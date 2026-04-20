@@ -1,0 +1,22 @@
+# Arduino / build artifacts
+build/
+*.elf
+*.hex
+*.bin
+*.map
+
+# IDE
+.vscode/
+.idea/
+*.code-workspace
+
+# Editor backups / temp
+*~
+*.bak
+*.swp
+.cache/
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
