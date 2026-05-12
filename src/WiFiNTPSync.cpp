@@ -171,19 +171,21 @@ void serviceWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks) {
 
   // 3) NTP server rotation — if no successful sync in ntpRotateAfterMs,
   //    flip primary/alternate. Checked once per minute.
+  //    Caller-owned Strings are read by reference (no copies, no trim) to
+  //    avoid a per-minute heap alloc/free pair. Caller is expected to trim
+  //    server names once at config time.
   static unsigned long lastRotCheck = 0;
   static bool          useAlt       = false;
   if (connected && millis() - lastRotCheck >= 60000) {
     lastRotCheck = millis();
-    String alternate = cfg.alternateNtpServer ? *cfg.alternateNtpServer : String();
-    alternate.trim();
-    if (alternate.length() > 0 && cfg.primaryNtpServer) {
+    if (cfg.primaryNtpServer   && cfg.primaryNtpServer->length()   > 0 &&
+        cfg.alternateNtpServer && cfg.alternateNtpServer->length() > 0) {
       uint32_t lastSync = ntp->timestamp();
       if (lastSync > 0 && (millis() - lastSync) > cfg.ntpRotateAfterMs) {
         useAlt = !useAlt;
-        String primary = *cfg.primaryNtpServer;
-        primary.trim();
-        _wnBeginNtp(ntp, useAlt ? alternate.c_str() : primary.c_str());
+        _wnBeginNtp(ntp,
+          useAlt ? cfg.alternateNtpServer->c_str()
+                 : cfg.primaryNtpServer->c_str());
         ntp->forceUpdate();
       }
     }
