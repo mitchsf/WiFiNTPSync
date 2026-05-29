@@ -20,13 +20,37 @@ static void _wnDoWifiBegin(const WiFiNTPConfig& cfg) {
 // Re-begin every attempt so DNS gets re-resolved. If the first resolve
 // happened before the WiFi stack was fully ready, the cached server IP
 // would be stale (or 0.0.0.0) and every forceUpdate would fail.
-// Timing overrides: library defaults (250 ms / 30 s) are too tight for
-// boot-time internet NTP — loosen to a 1.6 s response window and 1 s retry.
-static void _wnBeginNtp(NTP2* ntp, const char* server) {
+// Configure NTP2 timings. responseDelay is the wait-for-reply window; the
+// effective retry cycle is responseDelay + retryDelay. cycleMs is the total
+// cycle time the caller wants; we derive retryDelay from it.
+static void _wnBeginNtp(NTP2* ntp, const char* server, uint32_t cycleMs) {
+  const uint32_t responseMs = 1600;
+  uint32_t retryMs = (cycleMs > responseMs) ? (cycleMs - responseMs) : 100;
   ntp->begin(server);
   ntp->updateInterval(10000);
-  ntp->responseDelay(1600);
-  ntp->retryDelay(1000);
+  ntp->responseDelay(responseMs);
+  ntp->retryDelay(retryMs);
+}
+
+int scanUniqueSsids(String* out, int maxCount, uint32_t scanTimeMs) {
+  if (!out || maxCount <= 0) return 0;
+  int n = WiFi.scanNetworks(false, false, false, scanTimeMs);
+  if (n < 0) n = 0;
+  int count = 0;
+  for (int i = 0; i < n && count < maxCount; i++) {
+    String s = WiFi.SSID(i);
+    s.trim();
+    if (s.length() == 0) continue;          // hidden network
+    if (s.indexOf(',') >= 0) continue;      // CSV-unsafe for WebPanel dropdowns
+    bool dup = false;
+    for (int j = 0; j < count; j++) {
+      if (out[j] == s) { dup = true; break; }
+    }
+    if (dup) continue;
+    out[count++] = s;
+  }
+  WiFi.scanDelete();  // free the WiFi stack's internal scan result table
+  return count;
 }
 
 bool bootWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks) {
@@ -120,7 +144,13 @@ bool bootWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks) {
     const String& srv = (useAlt && alternate.length() > 0) ? alternate : primary;
     if (srv.length() == 0) break;   // nothing to try; leave ntpStat false
 
-    _wnBeginNtp(ntp, srv.c_str());
+    // First ntpBootFastRetryWindowMs of boot uses the fast cycle; after that,
+    // back off to the runtime cycle so we don't flood the server if the NTP
+    // path stays broken for a long boot stretch.
+    uint32_t cycleMs = (millis() - bootStart < cfg.ntpBootFastRetryWindowMs)
+                       ? cfg.ntpBootRetryCycleMs
+                       : cfg.ntpRuntimeRetryCycleMs;
+    _wnBeginNtp(ntp, srv.c_str(), cycleMs);
     ntp->forceUpdate();
 
     unsigned long ntpAttemptStart = millis();
@@ -185,7 +215,8 @@ void serviceWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks) {
         useAlt = !useAlt;
         _wnBeginNtp(ntp,
           useAlt ? cfg.alternateNtpServer->c_str()
-                 : cfg.primaryNtpServer->c_str());
+                 : cfg.primaryNtpServer->c_str(),
+          cfg.ntpRuntimeRetryCycleMs);
         ntp->forceUpdate();
       }
     }

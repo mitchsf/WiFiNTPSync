@@ -40,6 +40,15 @@ struct WiFiNTPConfig {
   uint32_t wifiRuntimeRetryMs       = 60000;
   uint32_t bootTotalTimeoutMs       = 0;          // 0 = unlimited (default)
   uint32_t progressIntervalMs       = 0;          // 0 = fire on every poll iteration
+
+  // NTP retry cycle (send + wait-for-reply + gap-before-next-send).
+  // Boot starts with ntpBootRetryCycleMs for ntpBootFastRetryWindowMs, then
+  // backs off to ntpRuntimeRetryCycleMs until the first sync lands. After
+  // that, retries on later failures use ntpRuntimeRetryCycleMs.
+  // Values are in ms and represent the total cycle time, not just the gap.
+  uint32_t ntpBootRetryCycleMs      = 5000;       // 5 s — fast initial discovery
+  uint32_t ntpBootFastRetryWindowMs = 30000;      // 30 s — bound the boot burst
+  uint32_t ntpRuntimeRetryCycleMs   = 30000;      // 30 s — RFC-friendly, no KoD risk
 };
 
 struct WiFiNTPHooks {
@@ -59,3 +68,15 @@ bool bootWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks);
 // ntp.update(), reconnects WiFi if dropped, rotates to alternate NTP
 // server if no sync in cfg.ntpRotateAfterMs.
 void serviceWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks);
+
+// Scan WiFi networks and return unique, trimmed SSIDs in RSSI order.
+// Filters applied:
+//   - empty SSID (hidden networks)
+//   - SSIDs containing ',' (can't be safely represented in CSV-separated
+//     dropdowns like WebPanel's, which splits options on commas)
+//   - subsequent occurrences of an SSID already kept (mesh / extender /
+//     dual-band routers broadcast one AP entry per radio/node)
+// `out` must be a caller-allocated String array of at least `maxCount`
+// entries. Returns the count of unique SSIDs actually written.
+// `scanTimeMs` is the per-channel passive scan time (default 200 ms).
+int scanUniqueSsids(String* out, int maxCount, uint32_t scanTimeMs = 200);
