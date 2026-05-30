@@ -23,11 +23,13 @@ static void _wnDoWifiBegin(const WiFiNTPConfig& cfg) {
 // Configure NTP2 timings. responseDelay is the wait-for-reply window; the
 // effective retry cycle is responseDelay + retryDelay. cycleMs is the total
 // cycle time the caller wants; we derive retryDelay from it.
+// updateInterval() is intentionally NOT set here — each caller owns the
+// post-sync polling cadence (otherwise a stale 10 s value would persist
+// past first sync and clobber the runtime interval on rotation).
 static void _wnBeginNtp(NTP2* ntp, const char* server, uint32_t cycleMs) {
   const uint32_t responseMs = 1600;
   uint32_t retryMs = (cycleMs > responseMs) ? (cycleMs - responseMs) : 100;
   ntp->begin(server);
-  ntp->updateInterval(10000);
   ntp->responseDelay(responseMs);
   ntp->retryDelay(retryMs);
 }
@@ -166,9 +168,8 @@ bool bootWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks) {
     }
   }
 
-  // Sync achieved — move to runtime interval with ±5 min jitter to avoid
-  // thundering-herd alignment across many devices.
-  ntp->updateInterval(cfg.ntpRuntimeIntervalMs + (long)random(-300000, 300000));
+  // Sync achieved — move to the caller's configured runtime interval.
+  ntp->updateInterval(cfg.ntpRuntimeIntervalMs);
   if (hooks.onSuccess) hooks.onSuccess(true, true);
   return true;
 }
@@ -217,6 +218,10 @@ void serviceWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks) {
           useAlt ? cfg.alternateNtpServer->c_str()
                  : cfg.primaryNtpServer->c_str(),
           cfg.ntpRuntimeRetryCycleMs);
+        // _wnBeginNtp no longer touches updateInterval; reassert the runtime
+        // cadence so future polls fire on cfg.ntpRuntimeIntervalMs rather than
+        // whatever activeInterval got reset to after the rotation forceUpdate.
+        ntp->updateInterval(cfg.ntpRuntimeIntervalMs);
         ntp->forceUpdate();
       }
     }
