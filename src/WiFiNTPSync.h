@@ -26,6 +26,7 @@
 
 #include <Arduino.h>
 #include <NTP2.h>
+#include "NtpGuard.h"     // client-side NTP sanity guard (shared by all clock apps)
 
 struct WiFiNTPConfig {
   NTP2*        ntpInstance          = nullptr;   // required
