@@ -149,7 +149,17 @@ bool bootWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks) {
     // First ntpBootFastRetryWindowMs of boot uses the fast cycle; after that,
     // back off to the runtime cycle so we don't flood the server if the NTP
     // path stays broken for a long boot stretch.
-    uint32_t cycleMs = (millis() - bootStart < cfg.ntpBootFastRetryWindowMs)
+    //
+    // Exception: when the caller bounds the boot with bootTotalTimeoutMs, stay
+    // on the fast cycle for the WHOLE budget. The backoff was meant to avoid
+    // flooding a forever-retrying boot — but a bounded boot reboots at the
+    // deadline anyway, so a 5 s cycle for <=2 min isn't flooding, and backing
+    // off to a 30 s cycle (longer than the 15 s per-attempt window → 1 packet
+    // per attempt) starves the back half of the budget and turns a marginal
+    // network into a reboot loop. Bounded boot: max robustness, deadline caps it.
+    uint32_t fastWindow = cfg.ntpBootFastRetryWindowMs;
+    if (cfg.bootTotalTimeoutMs > fastWindow) fastWindow = cfg.bootTotalTimeoutMs;
+    uint32_t cycleMs = (millis() - bootStart < fastWindow)
                        ? cfg.ntpBootRetryCycleMs
                        : cfg.ntpRuntimeRetryCycleMs;
     _wnBeginNtp(ntp, srv.c_str(), cycleMs);
