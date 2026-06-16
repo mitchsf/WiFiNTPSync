@@ -81,6 +81,10 @@ bool bootWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks) {
   // ----- WiFi phase -----
   if (hooks.onStart) hooks.onStart(false, false);
   WiFi.mode(WIFI_STA);
+  // Kill modem power-save NOW, before the boot NTP sync — not after boot.
+  // Default DTIM buffering delays incoming NTP UDP replies past the response
+  // window on a marginal link, turning a recoverable sync into a failed one.
+  if (cfg.disableModemSleep) WiFi.setSleep(false);
 
   while (!_wnWifiUp()) {
     if (expired()) return timeoutAndReturn(false, false);

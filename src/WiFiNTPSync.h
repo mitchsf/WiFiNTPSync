@@ -42,6 +42,14 @@ struct WiFiNTPConfig {
   uint32_t bootTotalTimeoutMs       = 0;          // 0 = unlimited (default)
   uint32_t progressIntervalMs       = 0;          // 0 = fire on every poll iteration
 
+  // Disable WiFi modem power-save the moment STA mode comes up, BEFORE the
+  // boot NTP sync. Default modem sleep wakes the radio only at DTIM beacon
+  // intervals and buffers incoming UDP, which delays NTP replies past the
+  // response window on a marginal RF link (weak antenna, long range). Mains-
+  // powered clocks want this off; leave true. Set false only for a battery
+  // device that needs modem sleep and can tolerate slower NTP.
+  bool     disableModemSleep        = true;
+
   // NTP retry cycle (send + wait-for-reply + gap-before-next-send).
   // Boot starts with ntpBootRetryCycleMs for ntpBootFastRetryWindowMs, then
   // backs off to ntpRuntimeRetryCycleMs until the first sync lands. After
