@@ -221,7 +221,11 @@ void serviceWiFiAndNTP(const WiFiNTPConfig& cfg, const WiFiNTPHooks& hooks) {
   //    server names once at config time.
   static unsigned long lastRotCheck = 0;
   static bool          useAlt       = false;
-  if (connected && millis() - lastRotCheck >= 60000) {
+  // Gate on a valid DHCP lease: _wnBeginNtp() below does a BLOCKING DNS resolve.
+  // On a half-up link (WL_CONNECTED flickers true with no lease) that resolve
+  // stalls the caller's loop for seconds; requiring localIP != 0 skips it until
+  // the link can actually carry DNS.
+  if (connected && WiFi.localIP() != IPAddress(0, 0, 0, 0) && millis() - lastRotCheck >= 60000) {
     lastRotCheck = millis();
     if (cfg.primaryNtpServer   && cfg.primaryNtpServer->length()   > 0 &&
         cfg.alternateNtpServer && cfg.alternateNtpServer->length() > 0) {
